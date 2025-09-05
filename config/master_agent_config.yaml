@@ -1,0 +1,118 @@
+# ACS Master Agent Configuration
+# This defines how all agents interact with the 100GB knowledge base
+# Version: 2.0 - January 4, 2025
+
+database:
+  host: 10.152.0.76
+  port: 5432
+  user: acs_chat_user
+  password: chatdb123
+  
+  # All agents can access the shared knowledge base
+  shared_database: acs_context_db
+  shared_tables:
+    - user_memory         # All agents read/write user facts
+    - conversations       # All agents log here
+    - knowledge_base      # All agents search here
+    - software_catalog    # All agents check expertise
+    - software_docs       # All agents read docs
+  
+  # Agent-specific databases (existing structure maintained)
+  agent_databases:
+    ACS-Manager:
+      database: acs_context_db
+      primary_tables:
+        - agent_personalities
+        - agent_collaboration_rules
+        - project_context
+        - project_tasks
+    
+    ACS-Voice:
+      database: acs_voice_hub_db
+      primary_tables:
+        - freeswitch_knowledge
+        - ivr_templates
+        - sip_trunk_configs
+        - call_detail_records
+    
+    ACS-Voice-Agent:
+      database: acs_voice_agent_db
+      primary_tables:
+        - ai_model_configs
+        - voice_profiles
+        - livekit_sessions
+        - transcription_logs
+
+knowledge_base:
+  tablespace: acs_knowledge
+  location: /var/lib/pgsql/data/knowledge
+  total_size: 100GB
+  current_usage: 48KB
+  
+  # Search configuration
+  search:
+    full_text: enabled
+    vector_search: pending_pgvector_install
+    cache_ttl: 3600
+  
+  # Expert routing based on software_catalog
+  expertise_routing:
+    FreeSWITCH: ACS-Voice
+    LiveKit: ACS-Voice-Agent
+    OpenAI: ACS-Voice-Agent
+    PostgreSQL: ACS-Manager
+    default: ACS-Manager
+
+infrastructure:
+  servers:
+    mcp_server: 10.152.0.70:8083
+    ui_server: 10.152.0.71:3211
+    dns_server: 10.152.0.75:53
+    db_server: 10.152.0.76:5432
+    freeswitch: 10.152.0.77:8021
+  
+  services:
+    redis:
+      status: not_installed
+      planned_use: working_memory
+    
+    pgvector:
+      status: not_installed
+      planned_use: semantic_search
+
+agent_collaboration:
+  # How agents work together
+  patterns:
+    - pattern: "configure|setup|build.*freeswitch|ivr|sip"
+      primary: ACS-Voice
+      support: [ACS-Manager]
+    
+    - pattern: "ai|livekit|whisper|gpt|cartesia|voice.*agent"
+      primary: ACS-Voice-Agent
+      support: [ACS-Manager]
+    
+    - pattern: "project|coordinate|manage|orchestrate"
+      primary: ACS-Manager
+      support: [ACS-Voice, ACS-Voice-Agent]
+  
+  # Shared memory access rules
+  memory_access:
+    all_agents_can:
+      - read: [user_memory, conversations, knowledge_base]
+      - write: [conversations]
+      - search: [knowledge_base, software_docs]
+    
+    privileged_access:
+      ACS-Manager:
+        - write: [user_memory, knowledge_base]
+        - manage: [project_context, project_tasks]
+
+version_control:
+  current_branch: working-state-2025-01-04
+  repositories:
+    - github.com/austenconsultants/acs-orchestrator
+    - github.com/austenconsultants/agent-acs-agent
+    - github.com/austenconsultants/agent-acs-voice-hub
+    - github.com/austenconsultants/agent-acs-voice-agent
+  
+  merge_strategy: "DO NOT MERGE until tested"
